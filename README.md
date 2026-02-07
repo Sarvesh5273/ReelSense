@@ -1,169 +1,282 @@
 # 🎬 ReelSense
-> **Explainable Movie Recommender System with Diversity Optimization**
->
-> *Submitted for **BrainDead @ Revelation 2K26** (Problem Statement 1)*
 
-[![Python](https://img.shields.io/badge/Python-3.9%2B-blue?logo=python&logoColor=white)](https://www.python.org/)
-[![Framework](https://img.shields.io/badge/Backend-FastAPI-009688?logo=fastapi&logoColor=white)](https://fastapi.tiangolo.com/)
-[![ML](https://img.shields.io/badge/AI-Scikit--Surprise-orange?logo=scikit-learn&logoColor=white)](https://surpriselib.com/)
-[![License](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
+## Explainable Movie Recommender System with Diversity Optimization
+
+> **BrainDead @ Revelation 2K26 – Problem Statement 1**
+> Department of Computer Science and Technology, IIEST Shibpur
 
 ---
 
-## 📜 Problem Statement: ReelSense
-**ReelSense** goes beyond simple rating prediction. In the world of algorithmic bias, popular movies often drown out hidden gems. Our challenge was to build a **Hybrid Recommender System** that balances **Accuracy** (RMSE) with **Diversity** (Catalog Coverage) while providing **Natural Language Explanations** for every suggestion.
+## 📌 Problem Statement Alignment (BrainDead – PS1)
 
-### 🎯 Key Objectives Achieved
-1.  **Hybrid Filtering:** Blends **Matrix Factorization (SVD)** for latent patterns with **Content-Based Filtering** (Tags/Genres) for semantic relevance.
-2.  **Diversity Optimization:** Implements re-ranking strategies to avoid "Popularity Bias" and increase **Catalog Coverage**.
-3.  **Explainability Layer:** Generates human-readable insights (e.g., *"Because you liked Inception..."*) using tag overlap and collaborative neighborhoods.
-4.  **Cold Start Handling:** Utilizes Bayesian Average Smoothing for items with sparse ratings.
+ReelSense directly addresses **Problem Statement 1** of the BrainDead competition. The objective is to design a **Top‑K Movie Recommendation System** that:
+
+* Generates **personalized recommendations** using hybrid approaches
+* Ensures **diversity and catalog coverage** to mitigate popularity bias
+* Provides **natural‑language explanations** for each recommendation
+* Reports **ranking, diversity, and novelty metrics**
+
+This repository contains the **complete pipeline**, from data preprocessing and EDA to model training, evaluation, and explainability.
+
+---
+
+## 📂 Dataset Description
+
+**Dataset:** MovieLens Latest Small
+**Source:** GroupLens Research
+**License:** MovieLens Terms of Use
+
+**Dataset Size**
+
+* 100,836 ratings
+* 610 users
+* 9,742 movies
+
+**Files Used**
+
+* `ratings.csv` – User ratings (0.5 to 5.0)
+* `movies.csv` – Movie metadata (title, genres)
+* `tags.csv` – User‑assigned free‑form tags
+* `links.csv` – External identifiers (IMDB, TMDb)
+
+---
+
+## 🧹 Preprocessing Pipeline
+
+The following preprocessing steps were applied:
+
+* Time‑based **train–test split** (leave‑last‑N ratings per user)
+* Removal of noisy and duplicate tags
+* Standardization of genre and tag tokens
+* Construction of **user–item interaction matrix**
+* Timestamp parsing and conversion to datetime
+* Normalization of popularity statistics for diversity metrics
+
+---
+
+## 🔍 Exploratory Data Analysis (EDA)
+
+Key analyses performed:
+
+* Rating distribution analysis
+* Genre popularity vs. average rating
+* User activity histogram (ratings per user)
+* Long‑tail distribution of movies
+* Temporal trends in rating behavior
+
+EDA visualizations are included in the `/notebooks` directory and are clearly labeled for interpretation.
+
+---
+
+## 🧠 Models Implemented
+
+### 1️⃣ Popularity‑Based Baseline
+
+* Top‑N most‑rated movies
+* Top‑N highest‑average‑rated movies
+
+### 2️⃣ Collaborative Filtering
+
+* User–User Collaborative Filtering
+* Item–Item Collaborative Filtering
+
+### 3️⃣ Matrix Factorization
+
+* Singular Value Decomposition (SVD)
+* Implemented using the **Surprise** library
+* Optimized for RMSE minimization
+
+### 4️⃣ Hybrid Recommendation Model
+
+A weighted hybrid of:
+
+* Collaborative scores (SVD)
+* Content similarity (genres + tags)
+* Bayesian‑smoothed global ratings
+
+---
+
+## 🧠 Hybrid Scoring Logic
+
+The final recommendation score is computed as:
+
+$$
+Score_{final} = (\alpha \cdot P_{SVD}) + (\beta \cdot P_{Content}) - (\gamma \cdot Popularity_{norm})
+$$
+
+Where:
+
+* $P_{SVD}$ captures latent user preferences
+* $P_{Content}$ captures semantic similarity
+* $Popularity_{norm}$ penalizes over‑popular items
+
+This formulation improves **novelty and catalog coverage** while retaining accuracy.
+
+---
+
+## ✨ Explainability Layer
+
+Each recommended movie is accompanied by a **human‑readable explanation**, generated using the dominant contributing signal.
+
+**Explanation Sources**
+
+* Tag similarity
+* Genre overlap
+* Collaborative neighborhood similarity
+* Global consensus (critically acclaimed but under‑watched)
+
+**Example Explanation**
+
+> "Because you liked *Inception* and *The Matrix*, which share the tags *sci‑fi* and *mind‑bending*."
+
+---
+
+## 🌍 Diversity & Novelty Strategy
+
+To mitigate popularity bias ("Harry Potter Effect"), ReelSense applies:
+
+* Popularity‑normalized penalties
+* Re‑ranking for long‑tail exposure
+* Intra‑list diversity optimization
+
+This ensures recommendations are **accurate, diverse, and non‑repetitive**.
+
+---
+
+## 📊 Evaluation Metrics (As per BrainDead Guidelines)
+
+### A. Rating Prediction
+
+* RMSE
+* MAE
+
+### B. Top‑K Recommendation (K = 10)
+
+* Precision@10
+* Recall@10
+* NDCG@10
+* MAP@10
+
+### C. Diversity & Novelty
+
+* Catalog Coverage
+* Intra‑List Diversity
+* Popularity‑Normalized Hits
+
+Baseline models are used for comparative benchmarking.
 
 ---
 
 ## 🏗️ System Architecture
 
-ReelSense operates on a unidirectional data flow pipeline, ensuring low-latency inference.
+The ReelSense system is designed with a clear separation between **offline model training** and **online inference**, ensuring scalability, interpretability, and low-latency recommendations.
 
-```mermaid
-graph TD
-    User([User Interaction]) -->|Request| FE[Frontend UI]
-    FE -->|GET /recommend| API[FastAPI Backend]
-    
-    subgraph "The ReelSense Engine"
-        API -->|Fetch Data| DB[(MovieLens Dataset)]
-        
-        subgraph "Hybrid Processing Core"
-            SVD["SVD Model <br/> (Collaborative Latent Factors)"]
-            BAY["Bayesian Smoother <br/> (Global Quality Stabilization)"]
-            TAG["Jaccard Similarity <br/> (Content Tag Matching)"]
-        end
-        
-        DB --> SVD & BAY & TAG
-        
-        SVD -->|Score A| AGG[Hybrid Aggregator]
-        BAY -->|Score B| AGG
-        TAG -->|Score C| AGG
-        
-        AGG -->|Raw Rankings| DIV[Diversity Re-Ranker]
-        DIV -->|Final Top-K| EXP[Explainability Generator]
+````mermaid
+graph LR
+
+    %% User Interaction Layer
+    U[User] -->|Preferences & History| FE[Frontend UI]
+    FE -->|REST Request| API[FastAPI Backend]
+
+    %% Online Inference Pipeline
+    subgraph Online Inference
+        API --> PROF[User Profile Builder]
+        PROF --> AGG[Hybrid Score Aggregator]
+        AGG --> RERANK[Diversity Re-Ranker]
+        RERANK --> EXPL[Explainability Engine]
     end
-    
-    EXP -->|JSON Response| API
-    API -->|Movie Cards + Why?| FE
 
-## 📂 Dataset & Preprocessing
+    %% Offline Training Pipeline
+    subgraph Offline Training
+        DATA[(MovieLens Dataset)] --> PRE[Preprocessing & EDA]
+        PRE --> SVD[SVD Collaborative Model]
+        PRE --> CONT[Content Model (Genres + Tags)]
+        PRE --> BAY[Bayesian Popularity Smoothing]
+    end
 
-We utilized the **MovieLens Latest Small** dataset (100k ratings).
+    %% Model Integration
+    SVD --> AGG
+    CONT --> AGG
+    BAY --> AGG
 
-| File | Feature Engineering |
-| :--- | :--- |
-| `ratings.csv` | **Time-based Split:** Implemented Leave-Last-N interaction split to simulate real-world testing. |
-| `movies.csv` | **One-Hot Encoding:** Genres processed into binary vectors for content filtering. |
-| `tags.csv` | **NLP Cleaning:** Lowercasing, stemming, and removal of stop-words to create dense Tag Profiles. |
-| `links.csv` | **External Mapping:** Linked to TMDb API for fetching real-time posters and metadata. |
-
-## 🧠 Methodology
-
-### 1. Collaborative Filtering (The "Brain")
-We employed **SVD (Singular Value Decomposition)** from the `Surprise` library to minimize RMSE.
-
-$$\hat{r}_{ui} = \mu + b_u + b_i + q_i^T p_u$$
-
-* *Captures latent user preferences (e.g., "User likes dark, psychological films").*
-
-### 2. The Explainability Layer
-Instead of a "Black Box," ReelSense generates dynamic explanations based on the dominant signal:
-* **Tag Overlap:** *"Because you liked **Inception** and **The Matrix**, which share the tags 'sci-fi' and 'mind-bending'."*
-* **Genre Similarity:** *"Highly rated **Action-Thriller** similar to your viewing history."*
-* **Global Consensus:** *"Critically acclaimed **Drama** that you might have missed."*
-
-### 3. Diversity & Novelty (The Hybrid Logic)
-To prevent the "Harry Potter Effect" (recommending only popular items), we introduced a **Novelty Penalty** in our ranking formula:
-
-$$Score_{final} = (\alpha \cdot P_{SVD}) + (\beta \cdot P_{Content}) - (\gamma \cdot Popularity_{norm})$$
-
-* *This pushes accurate but less-known movies higher in the list.*
-
-#### 📉 Hybrid Scoring Logic Diagram
+    %% Final Response
+    EXPL -->|Top-K Movies + Explanations| API
+    API --> FE
 ```mermaid
 graph LR
-    subgraph Inputs
-        A[SVD Score <br/> (Accuracy)]
-        B[Content Match <br/> (Relevance)]
-        C[Popularity <br/> (Bias)]
+
+    %% User Interaction Layer
+    U[User] -->|Preferences / History| FE[Frontend UI]
+    FE -->|API Request| API[FastAPI Service]
+
+    %% Online Inference Pipeline
+    subgraph Online Inference
+        API --> PROF[User Profile Builder]
+        PROF --> AGG[Hybrid Score Aggregator]
+        AGG --> RERANK[Diversity Re-Ranker]
+        RERANK --> EXPL[Explainability Engine]
     end
-    
-    A -->|Weight α| SUM((Weighted Sum))
-    B -->|Weight β| SUM
-    C -->|Penalty γ| SUM
-    
-    SUM --> RES[Final Rank Score]
-    RES -->|Top-K| LIST[Diverse Recommendations]
 
-## 📊 Evaluation Metrics
+    %% Offline Training Pipeline
+    subgraph Offline Training
+        DATA[(MovieLens Dataset)] --> PRE[Preprocessing & EDA]
+        PRE --> CF[Collaborative Model (SVD)]
+        PRE --> CB[Content Model (Genres + Tags)]
+        PRE --> POP[Popularity & Bayesian Smoothing]
+    end
 
-We benchmarked ReelSense against standard industry baselines.
+    %% Model Usage
+    CF --> AGG
+    CB --> AGG
+    POP --> AGG
 
-| Metric Categories | Metric | Our Score | Industry Baseline |
-| :--- | :--- | :--- | :--- |
-| **A. Rating Prediction** | **RMSE** | **0.87** | 0.90+ |
-| | **MAE** | **0.67** | 0.70+ |
-| **B. Ranking (Top-10)** | **Precision@10** | **0.72** | 0.60 |
-| | **MAP@10** | **0.65** | 0.55 |
-| **C. Diversity** | **Catalog Coverage** | **34.2%** | ~15% (Standard SVD) |
-| | **Novelty Score** | **High** | Low |
-
-## 🛠️ Installation & Setup
-
-### Prerequisites
-* Python 3.9+
-* Node.js (for Frontend)
-
-### 1. Backend Setup
-```bash
-# Clone the repository
-git clone [https://github.com/your-username/BrainDead-ReelSense.git](https://github.com/your-username/BrainDead-ReelSense.git)
-cd BrainDead-ReelSense
-
-# Install dependencies
-pip install -r requirements.txt
-
-# Run the Training Pipeline (Generates Models)
-python model_training.py
-
-# Start the API Server
-uvicorn api:app --reload
-
-### 2. Frontend Setup
-```bash
-cd frontend
-npm install
-npm run dev
-
-## 📦 Project Structure
-
-```bash
-BrainDead-ReelSense/
-├── data/                   # MovieLens Dataset (Cleaned)
-├── models/                 # Serialized .pkl models (SVD)
-├── notebooks/              # EDA and Experimentation .ipynb
-├── src/
-│   ├── api.py              # FastAPI Inference Engine
-│   ├── recommender.py      # Hybrid Logic Implementation
-│   └── explainability.py   # Natural Language Generation Logic
-├── frontend/               # React UI
-├── requirements.txt        # Python Dependencies
-└── README.md               # Project Documentation
-
-## 👥 Team Details
-**Department of Computer Science and Technology, IIEST Shibpur**
-
-* **Rachit** - *Lead ML Engineer & System Architect*
-* **Sarvesh ** - *Frontend Developer & UI/UX*
-* **Atharva** - *Data Analyst & Evaluation Specialist*
+    %% Response
+    EXPL -->|Top-K Movies + Explanations| API
+    API --> FE
+````
 
 ---
 
-> Built with ❤️ for **Revelation 2K26**.
-> *May our Loss Functions converge and our F1 Scores soar!* 🚀
+## 📦 Project Structure
+
+```
+ReelSense/
+├── data/                 # Data loading & preprocessing scripts
+├── notebooks/            # EDA & experiment notebooks
+├── recommender/          # Recommendation models
+├── explainability/       # Explanation generation logic
+├── evaluation/           # Metric computation
+├── app/                  # FastAPI backend
+├── requirements.txt
+└── README.md
+```
+
+---
+
+## 📦 Deliverables Checklist (BrainDead)
+
+* ✔️ Concise technical report (PDF / PPT)
+* ✔️ Public GitHub repository
+* ✔️ iPython notebooks for EDA & modeling
+* ✔️ Model training and evaluation code
+* ✔️ Explainability demonstrations
+
+---
+
+## 👥 Team Details
+
+**Department of Computer Science and Technology**
+**IIEST Shibpur**
+
+* **Rachit** – Lead ML Engineer & System Architect
+* **Sarvesh** – Frontend Developer & UI/UX
+* **Atharva** – Data Analyst & Evaluation Specialist
+
+---
+
+## ❤️ Acknowledgements
+
+Built with passion for **Revelation 2K26 – BrainDead**.
+May our models generalize, our bias reduce, and our recommendations make sense.
+
+

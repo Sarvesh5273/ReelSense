@@ -11,18 +11,28 @@ function App() {
   const [error, setError] = useState(null);
 
   const fetchRecommendations = async () => {
-    if (!userId.trim()) {
-      setError('Please enter a valid User ID.');
+    // Validation: Ensure input is a valid number
+    if (!userId.trim() || isNaN(userId)) {
+      setError('Please enter a valid numeric User ID.');
       return;
     }
+
     setLoading(true);
     setError(null);
     setRecommendations([]);
+
     try {
-      const response = await axios.get(`/recommendations?user_id=${userId}&top_k=10`);
+      // Use relative path so Vite proxy handles the connection to port 8000
+      const response = await axios.get('/recommendations', {
+        params: {
+          user_id: parseInt(userId),
+          top_k: 10
+        }
+      });
       setRecommendations(response.data);
     } catch (err) {
-      setError('Failed to fetch recommendations. Please check the User ID or try again.');
+      console.error(err);
+      setError('Failed to fetch recommendations. Ensure the backend is running on port 8000.');
     } finally {
       setLoading(false);
     }

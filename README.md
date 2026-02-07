@@ -52,52 +52,76 @@ graph TD
     EXP -->|JSON Response| API
     API -->|Movie Cards + Why?| FE
 
-📂 Dataset & Preprocessing
-We utilized the MovieLens Latest Small dataset (100k ratings).
+## 📂 Dataset & Preprocessing
 
-File	Feature Engineering
-ratings.csv	Time-based Split: Implemented Leave-Last-N interaction split to simulate real-world testing.
-movies.csv	One-Hot Encoding: Genres processed into binary vectors for content filtering.
-tags.csv	NLP Cleaning: Lowercasing, stemming, and removal of stop-words to create dense Tag Profiles.
-links.csv	External Mapping: Linked to TMDb API for fetching real-time posters and metadata.
-🧠 Methodology
-1. Collaborative Filtering (The "Brain")
-We employed SVD (Singular Value Decomposition) from the Surprise library to minimize RMSE. $$ \hat{r}_{ui} = \mu + b_u + b_i + q_i^T p_u $$
+We utilized the **MovieLens Latest Small** dataset (100k ratings).
 
-Captures latent user preferences (e.g., "User likes dark, psychological films").
+| File | Feature Engineering |
+| :--- | :--- |
+| `ratings.csv` | **Time-based Split:** Implemented Leave-Last-N interaction split to simulate real-world testing. |
+| `movies.csv` | **One-Hot Encoding:** Genres processed into binary vectors for content filtering. |
+| `tags.csv` | **NLP Cleaning:** Lowercasing, stemming, and removal of stop-words to create dense Tag Profiles. |
+| `links.csv` | **External Mapping:** Linked to TMDb API for fetching real-time posters and metadata. |
 
-2. The Explainability Layer
+## 🧠 Methodology
+
+### 1. Collaborative Filtering (The "Brain")
+We employed **SVD (Singular Value Decomposition)** from the `Surprise` library to minimize RMSE.
+
+$$\hat{r}_{ui} = \mu + b_u + b_i + q_i^T p_u$$
+
+* *Captures latent user preferences (e.g., "User likes dark, psychological films").*
+
+### 2. The Explainability Layer
 Instead of a "Black Box," ReelSense generates dynamic explanations based on the dominant signal:
+* **Tag Overlap:** *"Because you liked **Inception** and **The Matrix**, which share the tags 'sci-fi' and 'mind-bending'."*
+* **Genre Similarity:** *"Highly rated **Action-Thriller** similar to your viewing history."*
+* **Global Consensus:** *"Critically acclaimed **Drama** that you might have missed."*
 
-Tag Overlap: "Because you liked Inception and The Matrix, which share the tags 'sci-fi' and 'mind-bending'."
+### 3. Diversity & Novelty (The Hybrid Logic)
+To prevent the "Harry Potter Effect" (recommending only popular items), we introduced a **Novelty Penalty** in our ranking formula:
 
-Genre Similarity: "Highly rated Action-Thriller similar to your viewing history."
+$$Score_{final} = (\alpha \cdot P_{SVD}) + (\beta \cdot P_{Content}) - (\gamma \cdot Popularity_{norm})$$
 
-Global Consensus: "Critically acclaimed Drama that you might have missed."
+* *This pushes accurate but less-known movies higher in the list.*
 
-3. Diversity & Novelty
-To prevent the "Harry Potter Effect" (recommending only popular items), we introduced a Novelty Penalty in our ranking formula: $$ Score_{final} = (\alpha \cdot P_{SVD}) + (\beta \cdot P_{Content}) - (\gamma \cdot Popularity_{norm}) $$
+#### 📉 Hybrid Scoring Logic Diagram
+```mermaid
+graph LR
+    subgraph Inputs
+        A[SVD Score <br/> (Accuracy)]
+        B[Content Match <br/> (Relevance)]
+        C[Popularity <br/> (Bias)]
+    end
+    
+    A -->|Weight α| SUM((Weighted Sum))
+    B -->|Weight β| SUM
+    C -->|Penalty γ| SUM
+    
+    SUM --> RES[Final Rank Score]
+    RES -->|Top-K| LIST[Diverse Recommendations]
 
-This pushes accurate but less-known movies higher in the list.
+## 📊 Evaluation Metrics
 
-📊 Evaluation Metrics
-We benchmarked ReelSense against standard baselines.
+We benchmarked ReelSense against standard industry baselines.
 
-Metric Categories	Metric	Our Score	Industry Baseline
-A. Rating Prediction	RMSE	0.87	0.90+
-MAE	0.67	0.70+
-B. Ranking (Top-10)	Precision@10	0.72	0.60
-MAP@10	0.65	0.55
-C. Diversity	Catalog Coverage	34.2%	~15% (Standard SVD)
-Novelty Score	High	Low
-🛠️ Installation & Setup
-Prerequisites
-Python 3.9+
+| Metric Categories | Metric | Our Score | Industry Baseline |
+| :--- | :--- | :--- | :--- |
+| **A. Rating Prediction** | **RMSE** | **0.87** | 0.90+ |
+| | **MAE** | **0.67** | 0.70+ |
+| **B. Ranking (Top-10)** | **Precision@10** | **0.72** | 0.60 |
+| | **MAP@10** | **0.65** | 0.55 |
+| **C. Diversity** | **Catalog Coverage** | **34.2%** | ~15% (Standard SVD) |
+| | **Novelty Score** | **High** | Low |
 
-Node.js (for Frontend)
+## 🛠️ Installation & Setup
 
-1. Backend Setup
-Bash
+### Prerequisites
+* Python 3.9+
+* Node.js (for Frontend)
+
+### 1. Backend Setup
+```bash
 # Clone the repository
 git clone [https://github.com/your-username/BrainDead-ReelSense.git](https://github.com/your-username/BrainDead-ReelSense.git)
 cd BrainDead-ReelSense
@@ -110,13 +134,16 @@ python model_training.py
 
 # Start the API Server
 uvicorn api:app --reload
-2. Frontend Setup
-Bash
+
+### 2. Frontend Setup
+```bash
 cd frontend
 npm install
 npm run dev
-📦 Project Structure
-Bash
+
+## 📦 Project Structure
+
+```bash
 BrainDead-ReelSense/
 ├── data/                   # MovieLens Dataset (Cleaned)
 ├── models/                 # Serialized .pkl models (SVD)
@@ -128,13 +155,15 @@ BrainDead-ReelSense/
 ├── frontend/               # React UI
 ├── requirements.txt        # Python Dependencies
 └── README.md               # Project Documentation
-👥 Team Details
-Department of Computer Science and Technology, IIEST Shibpur
 
-Sarvesh - Lead ML Engineer & System Architect
+## 👥 Team Details
+**Department of Computer Science and Technology, IIEST Shibpur**
 
-[Teammate Name] - Frontend Developer & UI/UX
+* **Rachit** - *Lead ML Engineer & System Architect*
+* **Sarvesh ** - *Frontend Developer & UI/UX*
+* **Atharva** - *Data Analyst & Evaluation Specialist*
 
-[Teammate Name] - Data Analyst & Evaluation Specialist
+---
 
-Built with ❤️ for Revelation 2K26. May our Loss Functions converge and our F1 Scores soar! 🚀
+> Built with ❤️ for **Revelation 2K26**.
+> *May our Loss Functions converge and our F1 Scores soar!* 🚀

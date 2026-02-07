@@ -4,6 +4,7 @@ import pandas as pd
 import pickle
 import numpy as np
 from numpy.linalg import norm
+from collections import Counter
 
 app = FastAPI()
 
@@ -18,122 +19,148 @@ app.add_middleware(
 )
 
 # -------------------------------
-# Load Data & Model
+# 1. LOAD & PROCESS DATA
 # -------------------------------
+# Load basics
 ratings = pd.read_csv("ratings.csv")
 movies = pd.read_csv("movies.csv")
 tags = pd.read_csv("tags.csv")
+links = pd.read_csv("links.csv")  # <--- NEW: Load Links for Posters
 
-# Pre-process genres
+# Clean and Process Tags
+tags['tag'] = tags['tag'].astype(str).str.lower()
+movie_tags_map = tags.groupby('movieId')['tag'].apply(list).to_dict()
+
+# Merge Links into Movies (Adds 'tmdbId' to the dataframe)
+# This allows us to send the ID to the frontend for fetching images
+movies = movies.merge(links, on="movieId", how="left")
+
+# Calculate Movie Average Ratings (Global Group Patterns)
+movie_stats = ratings.groupby('movieId').agg({'rating': ['count', 'mean']})
+movie_stats.columns = ['count', 'mean']
+C = movie_stats['mean'].mean()
+m = movie_stats['count'].quantile(0.70)
+
+def weighted_rating(x):
+    v = x['count']
+    R = x['mean']
+    return (v/(v+m) * R) + (m/(m+v) * C)
+
+movie_stats['weighted_score'] = movie_stats.apply(weighted_rating, axis=1)
+weighted_scores = movie_stats['weighted_score'].to_dict()
+
+# Process Genres
 movies["genre_list"] = movies["genres"].apply(
     lambda x: [] if x == "(no genres listed)" else x.split("|")
 )
 
+# Load SVD Model
 with open("svd_model.pkl", "rb") as f:
     svd_model = pickle.load(f)
 
 # -------------------------------
-# HELPER: Cosine Similarity
+# 2. HELPER: TAG SIMILARITY
 # -------------------------------
-def compute_cosine_match(user_id, movie_id):
-    """
-    Calculates the geometric angle between the User Vector and Movie Vector.
-    Returns a percentage (0-100%).
-    """
-    try:
-        # 1. Convert Raw IDs to Internal Model IDs
-        inner_uid = svd_model.trainset.to_inner_uid(user_id)
-        inner_iid = svd_model.trainset.to_inner_iid(movie_id)
-        
-        # 2. Extract the Latent Vectors (The "Brain" Data)
-        user_vector = svd_model.pu[inner_uid]
-        movie_vector = svd_model.qi[inner_iid]
-        
-        # 3. Compute Cosine Similarity
-        # formula: (A . B) / (||A|| * ||B||)
-        dot_product = np.dot(user_vector, movie_vector)
-        magnitude = norm(user_vector) * norm(movie_vector)
-        
-        if magnitude == 0: return 50.0 # Neutral fallback
-        
-        cosine_sim = dot_product / magnitude
-        
-        # 4. Map -1.0 to 1.0 scale -> 0% to 100%
-        # -1 (Opposite) -> 0%
-        #  0 (Unrelated) -> 50%
-        # +1 (Perfect)  -> 100%
-        match_percentage = (cosine_sim + 1) / 2 * 100
-        
-        return round(match_percentage, 1)
-
-    except ValueError:
-        # ID not in training set (Cold start)
-        return 50.0
+def get_user_tag_profile(user_id):
+    """Analyzes the user's history to find their favorite TAGS."""
+    user_history = ratings[(ratings["userId"] == user_id) & (ratings["rating"] >= 4.0)]
+    liked_movie_ids = user_history["movieId"].tolist()
+    
+    all_user_tags = []
+    for mid in liked_movie_ids:
+        if mid in movie_tags_map:
+            all_user_tags.extend(movie_tags_map[mid])
+            
+    # Return top 15 most frequent tags for this user
+    if not all_user_tags: return set()
+    return set([t for t, c in Counter(all_user_tags).most_common(15)])
 
 # -------------------------------
-# Recommendation Logic
+# 3. RECOMMENDATION ENGINE
 # -------------------------------
 def recommend(user_id: int, top_k: int):
-    # 1. User History
+    # A. Get User History & Profile
     user_ratings = ratings[ratings["userId"] == user_id]
     watched_ids = set(user_ratings["movieId"])
+    user_fav_tags = get_user_tag_profile(user_id) 
     
-    # 2. Filter Candidates
+    # B. Filter Candidates
     candidate_movies = movies[~movies["movieId"].isin(watched_ids)]
     
     predictions = []
 
-    # 3. Process Candidates (No Randomness, Pure Math)
-    # We look at the top candidates the model predicts heavily
+    # C. Analyze Candidates (Hybrid Approach)
     for row in candidate_movies.itertuples(index=False):
         try:
-            # A. PREDICTED RATING (The Quality Score)
-            # This uses Bias + Dot Product
-            pred = svd_model.predict(user_id, row.movieId)
-            est = pred.est
-
-            # Filter: Only consider "Good" movies
-            if est < 3.0: continue
-
-            # B. MATCH PERCENTAGE (The Taste Score)
-            # This uses PURE Vector Similarity (Cosine)
-            match_score = compute_cosine_match(user_id, row.movieId)
-
-            # C. EXPLAINABILITY (Hackathon Req)
-            # Simple genre explanation
-            genre = row.genre_list[0] if row.genre_list else "Movies"
+            # 1. Personal Pattern (SVD Score)
+            svd_pred = svd_model.predict(user_id, row.movieId).est
             
-            # Logic: High Rating but Low Match? -> "Critically Acclaimed"
-            # Logic: High Rating AND High Match? -> "Perfect for you"
-            if match_score > 80:
-                explanation = f"Exact match for your taste in {genre}."
-            elif match_score > 50:
-                explanation = f"Highly rated {genre} film you might like."
+            # 2. Group Pattern (Global Weighted Average)
+            global_score = weighted_scores.get(row.movieId, 3.0)
+            
+            # 3. Hybrid Predictive Rating (The "Real" Rating)
+            # Formula: 70% Personal Taste + 30% Group Consensus
+            hybrid_rating = (svd_pred * 0.7) + (global_score * 0.3)
+            
+            # Cap at 5.0 for display
+            display_rating = min(5.0, hybrid_rating)
+            
+            # Filter low quality
+            if display_rating < 3.0: continue
+
+            # 4. Content Analysis (Tags)
+            current_tags = set(movie_tags_map.get(row.movieId, []))
+            overlap = user_fav_tags.intersection(current_tags)
+            
+            # 5. Recommendation Score (For Sorting Only)
+            tag_bonus = len(overlap) * 0.25
+            sort_score = display_rating + tag_bonus
+
+            # 6. Dynamic Explanation & Match %
+            genre = row.genre_list[0] if row.genre_list else "Film"
+            
+            if len(overlap) > 0:
+                top_match = list(overlap)[0]
+                explanation = f"Recommended because you like '{top_match}' movies."
+                base_match = 75 + (len(overlap) * 5) 
+                variance = (svd_pred % 1) * 10 
+                match_pct = min(99.5, base_match + variance)
+
+            elif svd_pred > 4.5:
+                explanation = f"Highly predicted match based on your viewing patterns."
+                match_pct = min(95, (svd_pred/5)*100)
             else:
-                explanation = f"Critically acclaimed {genre} film."
+                explanation = f"Critically acclaimed {genre} you might have missed."
+                match_pct = 60 + (global_score * 5) + ((svd_pred % 1) * 5)
+
+            # --- PREPARE TMDB ID FOR FRONTEND ---
+            # Handle potential NaNs safely (some old movies might miss IDs)
+            tmdb_id = int(row.tmdbId) if pd.notna(row.tmdbId) else None
 
             predictions.append({
                 "movieId": row.movieId,
                 "title": row.title,
-                "predicted_rating": round(est, 2),    # e.g., 4.12
-                "match_percentage": match_score,      # e.g., 53.4% (Real Vector Math)
-                "explanation": explanation
+                "tmdbId": tmdb_id, # <--- NEW: Sent to React for Poster
+                "predicted_rating": round(display_rating, 2), 
+                "match_percentage": round(match_pct, 1),
+                "explanation": explanation,
+                "sort_score": sort_score # Internal ranking key
             })
         except:
             continue
 
-    # 4. Sort Strategy
-    # We sort by Rating (Quality) first, but you can see the Match % variance
-    predictions.sort(key=lambda x: x["predicted_rating"], reverse=True)
+    # D. Final Sort
+    predictions.sort(key=lambda x: x["sort_score"], reverse=True)
+    
+    # Cleanup internal key
+    for p in predictions:
+        del p["sort_score"]
     
     return predictions[:top_k]
 
-# -------------------------------
-# API Endpoints
-# -------------------------------
 @app.get("/")
 def root():
-    return {"message": "ReelSense Vector-Math API Running"}
+    return {"message": "ReelSense Hybrid (Pattern Learning) API Running"}
 
 @app.get("/recommendations")
 def get_recommendations(user_id: int, top_k: int = 10):

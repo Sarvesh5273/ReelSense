@@ -40,3 +40,8 @@ Thumbs.db
 # ===============================
 coverage/
 .cache/
+
+
+.env
+.venv
+

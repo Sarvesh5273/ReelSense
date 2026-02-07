@@ -1,90 +1,111 @@
-import React from "react";
-import { motion } from "framer-motion";
+import React, { useEffect, useState } from "react";
 
-function MovieCard({ movie, isSkeleton = false }) {
+const MovieCard = ({ movie, isSkeleton = false }) => {
+  const [posterUrl, setPosterUrl] = useState(null);
+  const [loading, setLoading] = useState(true);
+
+  // -------------------------------------------
+  // 1. SKELETON STATE (Loading UI)
+  // -------------------------------------------
   if (isSkeleton) {
     return (
-      <div className="bg-gray-800 rounded-lg shadow-lg overflow-hidden animate-pulse">
+      <div className="bg-gray-800 rounded-xl overflow-hidden shadow-lg animate-pulse flex flex-col h-96">
         <div className="w-full h-64 bg-gray-700"></div>
-        <div className="p-4 space-y-2">
-          <div className="h-4 bg-gray-700 rounded"></div>
-          <div className="h-3 bg-gray-700 rounded w-2/3"></div>
-          <div className="h-2 bg-gray-700 rounded"></div>
+        <div className="p-4 space-y-3 flex-grow">
+          <div className="h-5 bg-gray-700 rounded w-3/4"></div>
+          <div className="h-4 bg-gray-700 rounded w-1/2"></div>
+          <div className="h-16 bg-gray-700 rounded w-full mt-auto"></div>
         </div>
       </div>
     );
   }
 
+  // -------------------------------------------
+  // 2. SAFETY CHECK (Prevents Crash)
+  // -------------------------------------------
   if (!movie) return null;
 
-  const posterUrl =
-    movie.poster ||
-    "https://via.placeholder.com/300x450?text=No+Poster";
+  // -------------------------------------------
+  // 3. TMDB FETCHER
+  // -------------------------------------------
+  useEffect(() => {
+    let isMounted = true; // Cleanup flag
 
-  const rating = Number(movie.predicted_rating || 0).toFixed(2);
-  const match = Number(movie.match_percentage || 0).toFixed(1);
+    if (movie.tmdbId) {
+      const apiKey = import.meta.env.VITE_TMDB_API_KEY; 
+      
+      fetch(`https://api.themoviedb.org/3/movie/${movie.tmdbId}?api_key=${apiKey}`)
+        .then((res) => res.json())
+        .then((data) => {
+          if (isMounted && data.poster_path) {
+            setPosterUrl(`https://image.tmdb.org/t/p/w500${data.poster_path}`);
+          }
+        })
+        .catch((err) => console.error("Poster Fetch Error:", err))
+        .finally(() => {
+          if (isMounted) setLoading(false);
+        });
+    } else {
+      setLoading(false);
+    }
 
+    return () => { isMounted = false; };
+  }, [movie.tmdbId]);
+
+  // -------------------------------------------
+  // 4. RENDER COMPONENT
+  // -------------------------------------------
   return (
-    <motion.div
-      className="bg-gray-800 rounded-lg shadow-lg overflow-hidden relative group cursor-pointer"
-      whileHover={{ scale: 1.05 }}
-      transition={{ duration: 0.2 }}
-    >
-      {/* Poster */}
-      <img
-        src={posterUrl}
-        alt={movie.title}
-        className="w-full h-64 object-cover"
-      />
-
-      {/* Card Content */}
-      <div className="p-4">
-        <h3 className="text-lg font-semibold truncate">
-          {movie.title}
-        </h3>
-
-        {/* Rating */}
-        <div className="flex items-center mt-1 text-sm">
-          <span className="text-yellow-400 mr-1">⭐</span>
-          <span>{rating}</span>
-        </div>
-
-        {/* Match Score */}
-        <div className="mt-2">
-          <span className="text-sm text-red-500">
-            🎯 {match}% Match
-          </span>
-          <div className="w-full bg-gray-700 rounded-full h-2 mt-1">
-            <div
-              className="bg-red-600 h-2 rounded-full"
-              style={{ width: `${match}%` }}
-            />
+    <div className="bg-gray-800 rounded-xl overflow-hidden shadow-lg hover:scale-105 transition-transform duration-300 flex flex-col h-full group">
+      
+      {/* Poster Image Layer */}
+      <div className="h-64 overflow-hidden bg-gray-900 relative">
+        {loading ? (
+          <div className="w-full h-full flex items-center justify-center bg-gray-900 animate-pulse">
+            <span className="text-gray-600 text-xs">Loading Visuals...</span>
           </div>
-        </div>
-
-        {/* Genres */}
-        {movie.genres && movie.genres.length > 0 && (
-          <div className="flex flex-wrap gap-1 mt-2">
-            {movie.genres.slice(0, 3).map((g) => (
-              <span
-                key={g}
-                className="text-xs bg-gray-700 px-2 py-1 rounded"
-              >
-                {g}
-              </span>
-            ))}
+        ) : posterUrl ? (
+          <img 
+            src={posterUrl} 
+            alt={movie.title} 
+            className="w-full h-full object-cover" 
+            loading="lazy" 
+          />
+        ) : (
+          <div className="w-full h-full flex items-center justify-center text-gray-500 bg-gray-900">
+            <span className="text-4xl">🎬</span>
           </div>
         )}
+        
+        {/* Match Percentage Badge */}
+        <div className="absolute top-2 right-2 bg-green-600/90 backdrop-blur-sm text-white text-xs font-bold px-2 py-1 rounded-full shadow-lg border border-green-400/30 z-10">
+          {movie.match_percentage}% Match
+        </div>
       </div>
 
-      {/* Hover Explanation */}
-      <div className="absolute inset-0 bg-black bg-opacity-80 flex items-center justify-center text-center opacity-0 group-hover:opacity-100 transition-opacity duration-300 px-4">
-        <p className="text-sm text-gray-200 leading-relaxed">
-          {movie.explanation}
-        </p>
+      {/* Content Layer */}
+      <div className="p-4 flex flex-col flex-grow relative">
+        <h3 className="font-bold text-white text-lg leading-tight mb-2 line-clamp-2" title={movie.title}>
+          {movie.title}
+        </h3>
+        
+        <div className="flex items-center justify-between mb-3">
+          <div className="flex items-center text-yellow-400 text-sm font-mono bg-gray-900/50 px-2 py-1 rounded">
+            <span className="mr-1">⭐</span>
+            {movie.predicted_rating} <span className="text-gray-500 text-xs ml-1">/ 5.0</span>
+          </div>
+        </div>
+
+        {/* Explainability Section */}
+        <div className="mt-auto pt-3 border-t border-gray-700">
+          <p className="text-gray-300 text-xs italic">
+            <span className="text-blue-400 font-semibold not-italic">AI Insight: </span>
+            "{movie.explanation}"
+          </p>
+        </div>
       </div>
-    </motion.div>
+    </div>
   );
-}
+};
 
 export default MovieCard;

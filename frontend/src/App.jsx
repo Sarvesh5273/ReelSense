@@ -11,7 +11,7 @@ function App() {
   const [error, setError] = useState(null);
 
   const fetchRecommendations = async () => {
-    // Validation: Ensure input is a valid number
+
     if (!userId.trim() || isNaN(userId)) {
       setError('Please enter a valid numeric User ID.');
       return;
@@ -22,7 +22,7 @@ function App() {
     setRecommendations([]);
 
     try {
-      // Use relative path so Vite proxy handles the connection to port 8000
+     
       const response = await axios.get('/recommendations', {
         params: {
           user_id: parseInt(userId),

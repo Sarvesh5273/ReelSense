@@ -2,27 +2,21 @@ import streamlit as st
 import pandas as pd
 import pickle
 
-# =========================================================
-# ⚡ CACHED DATA LOADING (MAJOR SPEED BOOST)
-# =========================================================
 @st.cache_data
 def load_data():
     ratings = pd.read_csv("ratings.csv")
     movies = pd.read_csv("movies.csv")
     tags = pd.read_csv("tags.csv")
 
-    # ---- Type safety ----
     ratings["userId"] = ratings["userId"].astype(int)
     ratings["movieId"] = ratings["movieId"].astype(int)
     movies["movieId"] = movies["movieId"].astype(int)
     tags["movieId"] = tags["movieId"].astype(int)
 
-    # ---- Clean genres ----
     movies["genre_list"] = movies["genres"].apply(
         lambda x: [] if x == "(no genres listed)" else x.split("|")
     )
 
-    # ---- Movie → tag mapping ----
     movie_tags = (
         tags.groupby("movieId")["tag"]
         .apply(lambda x: set(x.str.lower()))
@@ -34,9 +28,6 @@ def load_data():
 
 ratings, movies, movie_tags = load_data()
 
-# =========================================================
-# 🔹 LOAD TRAINED SVD MODEL (ONCE)
-# =========================================================
 @st.cache_resource
 def load_model():
     with open("svd_model.pkl", "rb") as f:
@@ -44,9 +35,6 @@ def load_model():
 
 svd_model = load_model()
 
-# =========================================================
-# HELPER FUNCTIONS
-# =========================================================
 
 def get_user_history(user_id, min_rating=4.0, top_n=5):
     history = ratings[
@@ -65,7 +53,7 @@ def compute_match_percentage(user_id, rec_movie_id, rec_genres):
     if not liked_movies:
         return 0.0
 
-    # -------- Genre similarity --------
+   
     user_genres = set()
     for mid in liked_movies:
         row = movies[movies["movieId"] == mid]
@@ -78,7 +66,7 @@ def compute_match_percentage(user_id, rec_movie_id, rec_genres):
     genre_overlap = set(rec_genres) & user_genres
     genre_score = len(genre_overlap) / len(user_genres)
 
-    # -------- Tag bonus --------
+   
     user_tags = set()
     for mid in liked_movies:
         user_tags.update(movie_tags.get(mid, set()))
@@ -88,7 +76,7 @@ def compute_match_percentage(user_id, rec_movie_id, rec_genres):
     tag_bonus = 0.0
     if user_tags and rec_tags:
         overlap = user_tags & rec_tags
-        tag_bonus = min(len(overlap) * 0.04, 0.2)  # max +20%
+        tag_bonus = min(len(overlap) * 0.04, 0.2) 
 
     return round((genre_score + tag_bonus) * 100, 1)
 
@@ -114,9 +102,6 @@ def explain_recommendation(user_id, rec_movie):
         return "Recommended based on users with similar preferences."
 
 
-# =========================================================
-# ⚡ CACHED SVD CANDIDATE GENERATION
-# =========================================================
 @st.cache_data
 def generate_svd_candidates(user_id):
     watched = set(
@@ -172,9 +157,6 @@ def svd_recommendations(user_id, top_n=5):
 
     return final_df.head(top_n)
 
-# =========================================================
-# STREAMLIT UI
-# =========================================================
 st.set_page_config(page_title="ReelSense", layout="centered")
 
 st.title("🎬 ReelSense")
@@ -192,7 +174,6 @@ top_k = st.slider("Number of recommendations", 1, 10, 5)
 
 if st.button("Get Recommendations"):
 
-    # ---- User profile snapshot ----
     st.subheader("👤 User Profile Snapshot (Liked Movies)")
     history = get_user_history(user_id)
 
@@ -202,7 +183,6 @@ if st.button("Get Recommendations"):
         for _, row in history.iterrows():
             st.write(f"• **{row['title']}** — ⭐ {row['rating']}")
 
-    # ---- Recommendations ----
     st.subheader("🎯 Recommended Movies")
     recs = svd_recommendations(user_id, top_k)
 

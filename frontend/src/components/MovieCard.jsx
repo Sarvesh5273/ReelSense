@@ -4,9 +4,6 @@ const MovieCard = ({ movie, isSkeleton = false }) => {
   const [posterUrl, setPosterUrl] = useState(null);
   const [loading, setLoading] = useState(true);
 
-  // -------------------------------------------
-  // 1. SKELETON STATE (Loading UI)
-  // -------------------------------------------
   if (isSkeleton) {
     return (
       <div className="bg-gray-800 rounded-xl overflow-hidden shadow-lg animate-pulse flex flex-col h-96">
@@ -20,16 +17,12 @@ const MovieCard = ({ movie, isSkeleton = false }) => {
     );
   }
 
-  // -------------------------------------------
-  // 2. SAFETY CHECK (Prevents Crash)
-  // -------------------------------------------
+
   if (!movie) return null;
 
-  // -------------------------------------------
-  // 3. TMDB FETCHER
-  // -------------------------------------------
+
   useEffect(() => {
-    let isMounted = true; // Cleanup flag
+    let isMounted = true; 
 
     if (movie.tmdbId) {
       const apiKey = import.meta.env.VITE_TMDB_API_KEY; 
@@ -52,9 +45,7 @@ const MovieCard = ({ movie, isSkeleton = false }) => {
     return () => { isMounted = false; };
   }, [movie.tmdbId]);
 
-  // -------------------------------------------
-  // 4. RENDER COMPONENT
-  // -------------------------------------------
+
   return (
     <div className="bg-gray-800 rounded-xl overflow-hidden shadow-lg hover:scale-105 transition-transform duration-300 flex flex-col h-full group">
       
